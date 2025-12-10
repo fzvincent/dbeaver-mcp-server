@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import csv from 'csv-parser';
 import { Client } from 'pg';
+import mysql from 'mysql2/promise';
 import {
   DBeaverConnection,
   QueryResult,
@@ -117,6 +118,8 @@ export class DBeaverClient {
       return this.executeSQLiteQuery(connection, query);
     } else if (driver.includes('postgres')) {
       return this.executePostgreSQLQuery(connection, query);
+    } else if (driver.includes('mysql') || driver.includes('mariadb')) {
+      return this.executeMySQLQuery(connection, query);
     } else {
       // For unsupported drivers, return a helpful error instead of crashing
       throw new Error(`Database driver "${driver}" is not yet supported for direct query execution. Supported drivers: SQLite, PostgreSQL. Please use DBeaver GUI for this connection type.`);
@@ -229,6 +232,61 @@ export class DBeaverClient {
           host,
           database
         });
+      }
+    }
+  }
+
+  private async executeMySQLQuery(connection: DBeaverConnection, query: string): Promise<QueryResult> {
+    const host = connection.host || connection.properties?.host || 'localhost';
+    const port = connection.port || (connection.properties?.port ? parseInt(connection.properties.port) : 3306);
+    const database = connection.database || connection.properties?.database || 'mysql';
+    const user = connection.user || connection.properties?.user || 'root';
+    const password = connection.properties?.password;
+
+    let conn;
+    try {
+      conn = await mysql.createConnection({
+        host,
+        port,
+        user,
+        password,
+        database,
+        rowsAsArray: false // we want objects to map to columns easier or arrays?
+        // pg returns rows as objects but we mapped them to arrays. 
+        // let's stick to standard behavior and map manualy.
+      });
+
+      // mysql2 execute/query returns [rows, fields]
+      const [rows, fields] = await conn.query(query);
+
+      // Parse columns
+      const columns: string[] = fields ? fields.map((f: any) => f.name) : [];
+
+      // Parse rows
+      // rows is RowDataPacket[] usually (array of objects)
+      const dataRows: any[][] = [];
+
+      if (Array.isArray(rows)) {
+        rows.forEach((row: any) => {
+          if (Array.isArray(row)) {
+            dataRows.push(row);
+          } else {
+            // It's an object, map to columns
+            dataRows.push(columns.map(col => row[col]));
+          }
+        });
+      }
+
+      return {
+        columns,
+        rows: dataRows,
+        rowCount: dataRows.length,
+        executionTime: 0
+      };
+
+    } finally {
+      if (conn) {
+        await conn.end();
       }
     }
   }
