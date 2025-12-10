@@ -4,13 +4,13 @@ import path from 'path';
 import os from 'os';
 import csv from 'csv-parser';
 import { Client } from 'pg';
-import { 
-  DBeaverConnection, 
-  QueryResult, 
-  SchemaInfo, 
-  ExportOptions, 
+import {
+  DBeaverConnection,
+  QueryResult,
+  SchemaInfo,
+  ExportOptions,
   ConnectionTest,
-  DatabaseStats 
+  DatabaseStats
 } from './types.js';
 import { findDBeaverExecutable, getTestQuery, parseVersionFromResult, buildSchemaQuery, buildListTablesQuery } from './utils.js';
 
@@ -27,7 +27,7 @@ export class DBeaverClient {
 
   async executeQuery(connection: DBeaverConnection, query: string): Promise<QueryResult> {
     const startTime = Date.now();
-    
+
     try {
       // Use native database tools instead of DBeaver command line
       const result = await this.executeWithNativeTool(connection, query);
@@ -40,12 +40,12 @@ export class DBeaverClient {
 
   async testConnection(connection: DBeaverConnection): Promise<ConnectionTest> {
     const startTime = Date.now();
-    
+
     try {
       // Simple test query based on database type
       const testQuery = this.getTestQuery(connection.driver);
       const result = await this.executeQuery(connection, testQuery);
-      
+
       return {
         connectionId: connection.id,
         success: true,
@@ -65,13 +65,13 @@ export class DBeaverClient {
   async getTableSchema(connection: DBeaverConnection, tableName: string): Promise<SchemaInfo> {
     const schemaQuery = this.buildSchemaQuery(connection.driver, tableName);
     const result = await this.executeQuery(connection, schemaQuery);
-    
+
     return this.parseSchemaResult(result, tableName);
   }
 
   async exportData(
-    connection: DBeaverConnection, 
-    query: string, 
+    connection: DBeaverConnection,
+    query: string,
     options: ExportOptions
   ): Promise<string> {
     const tempDir = os.tmpdir();
@@ -112,7 +112,7 @@ export class DBeaverClient {
 
   private async executeWithNativeTool(connection: DBeaverConnection, query: string): Promise<QueryResult> {
     const driver = connection.driver.toLowerCase();
-    
+
     if (driver.includes('sqlite')) {
       return this.executeSQLiteQuery(connection, query);
     } else if (driver.includes('postgres')) {
@@ -132,36 +132,36 @@ export class DBeaverClient {
       }
 
       const proc = spawn('sqlite3', [dbPath, '-header', '-csv'], { stdio: ['pipe', 'pipe', 'pipe'] });
-      
+
       let output = '';
       let error = '';
-      
+
       proc.stdout.on('data', (data) => {
         output += data.toString();
       });
-      
+
       proc.stderr.on('data', (data) => {
         error += data.toString();
       });
-      
+
       proc.on('close', (code) => {
         if (code !== 0) {
           reject(new Error(`SQLite error: ${error}`));
           return;
         }
-        
+
         const lines = output.trim().split('\n');
         if (lines.length === 0) {
           resolve({ columns: [], rows: [], rowCount: 0, executionTime: 0 });
           return;
         }
-        
+
         const columns = lines[0].split(',');
         const rows = lines.slice(1).map(line => line.split(','));
-        
+
         resolve({ columns, rows, rowCount: rows.length, executionTime: 0 });
       });
-      
+
       proc.stdin.write(query);
       proc.stdin.end();
     });
@@ -175,7 +175,7 @@ export class DBeaverClient {
     const password = connection.properties?.password || process.env.PGPASSWORD;
 
     // SSL handling
-    const sslModeRaw = connection.properties?.['ssl.mode'] || connection.properties?.['sslmode'] || connection.properties?.['ssl'];
+    const sslModeRaw = connection.properties?.['sslMode'] || connection.properties?.['ssl.mode'] || connection.properties?.['sslmode'] || connection.properties?.['ssl'];
     const sslMode = String(sslModeRaw ?? '').toLowerCase();
     const sslRootCert = connection.properties?.['sslrootcert'] || connection.properties?.['ssl.root.cert'] || connection.properties?.['sslRootCert'];
     const sslCert = connection.properties?.['sslcert'] || connection.properties?.['ssl.cert'] || connection.properties?.['sslCert'];
@@ -211,6 +211,7 @@ export class DBeaverClient {
       ssl = false;
     }
 
+
     const client = new Client({ host, port, database, user, password, ssl });
     try {
       await client.connect();
@@ -235,18 +236,18 @@ export class DBeaverClient {
   private async executeDBeaver(args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
       const proc = spawn(this.executablePath, args, { stdio: this.debug ? 'inherit' : 'ignore' });
-      
+
       // Set up timeout
       const timeoutId = setTimeout(() => {
         proc.kill('SIGTERM');
         reject(new Error(`DBeaver execution timed out after ${this.timeout}ms`));
       }, this.timeout);
-      
+
       proc.on('error', (error) => {
         clearTimeout(timeoutId);
         reject(error);
       });
-      
+
       proc.on('exit', (code) => {
         clearTimeout(timeoutId);
         if (code === 0) {
@@ -275,13 +276,13 @@ export class DBeaverClient {
       const rows: any[] = [];
       let columns: string[] = [];
       let rowCount = 0;
-      
+
       // Check if file exists first
       if (!fs.existsSync(filePath)) {
         reject(new Error(`Output file not found: ${filePath}`));
         return;
       }
-      
+
       fs.createReadStream(filePath)
         .pipe(csv())
         .on('headers', (headers) => {
@@ -315,7 +316,7 @@ export class DBeaverClient {
 
   private parseSchemaResult(result: any, tableName: string): SchemaInfo {
     const columns: any[] = [];
-    
+
     if (result.rows && result.columns) {
       // Parse each row as a column definition
       result.rows.forEach((row: any[]) => {
@@ -326,11 +327,11 @@ export class DBeaverClient {
           isPrimaryKey: false,
           isAutoIncrement: false
         };
-        
+
         // Map columns based on the query result structure
         result.columns.forEach((colName: string, idx: number) => {
           const value = row[idx];
-          
+
           switch (colName.toLowerCase()) {
             case 'column_name':
             case 'name':
@@ -369,13 +370,13 @@ export class DBeaverClient {
               break;
           }
         });
-        
+
         if (columnInfo.name) {
           columns.push(columnInfo);
         }
       });
     }
-    
+
     return {
       tableName,
       columns,
@@ -386,17 +387,17 @@ export class DBeaverClient {
 
   async getDatabaseStats(connection: DBeaverConnection): Promise<DatabaseStats> {
     const startTime = Date.now();
-    
+
     try {
       // Get table count
       const tables = await this.listTables(connection, undefined, true);
       const tableCount = tables.length;
-      
+
       // Get server version
       const versionQuery = this.getTestQuery(connection.driver);
       const versionResult = await this.executeQuery(connection, versionQuery);
       const serverVersion = this.extractVersionFromResult(versionResult) || 'Unknown';
-      
+
       return {
         connectionId: connection.id,
         tableCount,
@@ -419,7 +420,7 @@ export class DBeaverClient {
     try {
       const query = buildListTablesQuery(connection.driver, schema, includeViews);
       const result = await this.executeQuery(connection, query);
-      
+
       // Convert result to table objects
       return result.rows.map(row => {
         const tableObj: any = {};
