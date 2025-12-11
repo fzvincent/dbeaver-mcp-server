@@ -22,7 +22,7 @@ export class DBeaverConfigParser {
       debug: config.debug || false,
       ...config
     };
-    
+
     // Detect if we're using the new DBeaver format
     this.isNewFormat = this.detectNewFormat();
   }
@@ -41,31 +41,31 @@ export class DBeaverConfigParser {
       'org.jkiss.dbeaver.core',
       'connections.xml'
     );
-    
+
     // If new format exists, use it
     if (fs.existsSync(newFormatPath)) {
       return true;
     }
-    
+
     // If old format exists, use it
     if (fs.existsSync(oldFormatPath)) {
       return false;
     }
-    
+
     // If neither exists, check for new format directory structure
     const newFormatDir = path.join(this.config.workspacePath!, 'General', '.dbeaver');
     const oldFormatDir = path.join(this.config.workspacePath!, '.metadata');
-    
+
     // Prefer new format if its directory structure exists
     if (fs.existsSync(newFormatDir)) {
       return true;
     }
-    
+
     // Default to old format if metadata directory exists
     if (fs.existsSync(oldFormatDir)) {
       return false;
     }
-    
+
     // Default to new format for newer DBeaver installations
     return true;
   }
@@ -124,20 +124,20 @@ export class DBeaverConfigParser {
 
   async parseConnections(): Promise<DBeaverConnection[]> {
     const connectionsFile = this.getConnectionsFilePath();
-    
+
     if (!fs.existsSync(connectionsFile)) {
       // Try the alternative format if the detected format file doesn't exist
       const alternativeFormat = !this.isNewFormat;
-      const alternativeFile = alternativeFormat 
+      const alternativeFile = alternativeFormat
         ? path.join(this.config.workspacePath!, 'General', '.dbeaver', 'data-sources.json')
         : path.join(this.config.workspacePath!, '.metadata', '.plugins', 'org.jkiss.dbeaver.core', 'connections.xml');
-      
+
       if (fs.existsSync(alternativeFile)) {
         // Switch to the alternative format and retry
         this.isNewFormat = alternativeFormat;
         return this.parseConnections();
       }
-      
+
       // Neither format exists - return empty array instead of throwing error
       if (this.config.debug) {
         console.warn(`No DBeaver connections found. Checked:\n- ${connectionsFile}\n- ${alternativeFile}`);
@@ -147,16 +147,16 @@ export class DBeaverConfigParser {
 
     try {
       let connections: DBeaverConnection[] = [];
-      
+
       if (this.isNewFormat) {
         connections = await this.parseNewFormatConnections(connectionsFile);
       } else {
         connections = await this.parseOldFormatConnections(connectionsFile);
       }
-      
+
       // Load and merge credentials
       await this.loadCredentials(connections);
-      
+
       return connections;
     } catch (error) {
       throw new Error(`Failed to parse DBeaver connections: ${error}`);
@@ -166,16 +166,16 @@ export class DBeaverConfigParser {
   private async parseNewFormatConnections(filePath: string): Promise<DBeaverConnection[]> {
     const jsonContent = fs.readFileSync(filePath, 'utf-8');
     const data = JSON.parse(jsonContent);
-    
+
     const connections: DBeaverConnection[] = [];
-    
+
     if (!data.connections) {
       return connections;
     }
 
     for (const [connectionId, connData] of Object.entries(data.connections)) {
       const conn = connData as any;
-      
+
       const connection: DBeaverConnection = {
         id: connectionId,
         name: conn.name || connectionId,
@@ -196,8 +196,25 @@ export class DBeaverConfigParser {
           port: config.port ? String(config.port) : '',
           database: config.database || '',
           server: config.server || '',
-          ...config
+          ...config,
+          // Flatten nested properties which often contain driver-specific settings like SSL
+          ...(config.properties || {}),
+          ...(config['provider-properties'] || {}),
+          ...(config['auth-properties'] || {})
         };
+
+        // Extract properties from handlers (e.g. SSL configuration)
+        const handlers = conn.handlers || (conn.configuration && conn.configuration.handlers);
+        if (handlers) {
+          for (const handler of Object.values(handlers)) {
+            if ((handler as any).enabled && (handler as any).properties) {
+              connection.properties = {
+                ...connection.properties,
+                ...(handler as any).properties
+              };
+            }
+          }
+        }
 
         connection.url = config.url || '';
         connection.user = config.user || '';
@@ -215,19 +232,19 @@ export class DBeaverConfigParser {
   private async parseOldFormatConnections(filePath: string): Promise<DBeaverConnection[]> {
     const xmlContent = fs.readFileSync(filePath, 'utf-8');
     const result = await parseXML(xmlContent);
-    
+
     return this.extractConnections(result);
   }
 
   private extractConnections(xmlData: any): DBeaverConnection[] {
     const connections: DBeaverConnection[] = [];
-    
+
     if (!xmlData.connections || !xmlData.connections.connection) {
       return connections;
     }
 
-    const connectionArray = Array.isArray(xmlData.connections.connection) 
-      ? xmlData.connections.connection 
+    const connectionArray = Array.isArray(xmlData.connections.connection)
+      ? xmlData.connections.connection
       : [xmlData.connections.connection];
 
     for (const conn of connectionArray) {
@@ -245,7 +262,7 @@ export class DBeaverConfigParser {
       if (conn.property) {
         const properties: Record<string, string> = {};
         const propArray = Array.isArray(conn.property) ? conn.property : [conn.property];
-        
+
         for (const prop of propArray) {
           if (prop.$ && prop.$.name && prop.$.value) {
             properties[prop.$.name] = prop.$.value;
@@ -269,8 +286,8 @@ export class DBeaverConfigParser {
   async getConnection(connectionId: string): Promise<DBeaverConnection | null> {
     try {
       const connections = await this.parseConnections();
-      return connections.find(conn => 
-        conn.id === connectionId || 
+      return connections.find(conn =>
+        conn.id === connectionId ||
         conn.name === connectionId
       ) || null;
     } catch (error) {
@@ -283,7 +300,7 @@ export class DBeaverConfigParser {
 
   async validateConnection(connectionId: string): Promise<boolean> {
     const connection = await this.getConnection(connectionId);
-    
+
     if (!connection) {
       return false;
     }
@@ -318,13 +335,13 @@ export class DBeaverConfigParser {
     try {
       const xmlContent = fs.readFileSync(driversFile, 'utf-8');
       const result: any = await parseXML(xmlContent);
-      
+
       if (!result.drivers || !result.drivers.driver) {
         return null;
       }
 
-      const driverArray = Array.isArray(result.drivers.driver) 
-        ? result.drivers.driver 
+      const driverArray = Array.isArray(result.drivers.driver)
+        ? result.drivers.driver
         : [result.drivers.driver];
 
       return driverArray.find((driver: any) => driver.$.id === driverId) || null;
@@ -339,7 +356,7 @@ export class DBeaverConfigParser {
   async getConnectionFolders(): Promise<string[]> {
     const connections = await this.parseConnections();
     const folders = new Set<string>();
-    
+
     connections.forEach(conn => {
       if (conn.folder) {
         folders.add(conn.folder);
@@ -351,7 +368,7 @@ export class DBeaverConfigParser {
 
   isWorkspaceValid(): boolean {
     const workspacePath = this.config.workspacePath!;
-    
+
     if (this.isNewFormat) {
       const newFormatPath = path.join(workspacePath, 'General', '.dbeaver');
       return fs.existsSync(workspacePath) && fs.existsSync(newFormatPath);
@@ -380,31 +397,31 @@ export class DBeaverConfigParser {
    */
   private async loadCredentials(connections: DBeaverConnection[]): Promise<void> {
     const credentialsFile = this.getCredentialsFilePath();
-    
+
     if (!fs.existsSync(credentialsFile)) {
       if (this.config.debug) {
         console.warn(`Credentials file not found: ${credentialsFile}`);
       }
       return;
     }
-    
+
     try {
       const encryptedData = fs.readFileSync(credentialsFile);
       const decryptedData = this.decryptCredentials(encryptedData);
       const credentials = JSON.parse(decryptedData);
-      
+
       // Merge credentials into connections
       for (const connection of connections) {
         const connId = connection.id;
-        
+
         // Look for credentials in the decrypted data
         if (credentials[connId]) {
           const connCreds = credentials[connId];
-          
+
           // Extract credentials from the nested structure
           if (connCreds['#connection']) {
             const creds = connCreds['#connection'];
-            
+
             if (creds.user) {
               connection.user = creds.user;
               if (!connection.properties) {
@@ -412,7 +429,7 @@ export class DBeaverConfigParser {
               }
               connection.properties.user = creds.user;
             }
-            
+
             if (creds.password) {
               if (!connection.properties) {
                 connection.properties = {};
@@ -422,7 +439,7 @@ export class DBeaverConfigParser {
           }
         }
       }
-      
+
       if (this.config.debug) {
         console.error(`Successfully loaded credentials for ${connections.length} connections`);
       }

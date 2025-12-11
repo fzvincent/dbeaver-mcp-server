@@ -41,11 +41,17 @@ pids/
 temp/
 tmp/
 
-# Coverage directory used by tools like istanbul
+# Coverage
 coverage/
 .nyc_output/
 
 # Test results
 test-results/
 
-database-mcp/
+# Local data and scripts (Non-General)
+query_results.csv
+*.csv
+*.sql
+execute-query.ts
+# specific ignore if needed
+local-scripts/
