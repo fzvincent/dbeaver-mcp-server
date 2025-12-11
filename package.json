@@ -1,5 +1,5 @@
 {
-    "name": "dbeaver-mcp-server",
+    "name": "@fzvincent/dbeaver-mcp-server",
     "version": "1.2.3",
     "description": "Production-ready Model Context Protocol server for universal database access through DBeaver connections - supports 200+ database types",
     "main": "dist/index.js",
@@ -49,7 +49,10 @@
         "database-connectivity",
         "universal-database"
     ],
-    "author": "Sarthak Jain",
+    "author": "fzvincent",
+    "contributors": [
+        "Sarthak Jain"
+    ],
     "license": "MIT",
     "dependencies": {
         "@modelcontextprotocol/sdk": "1.9.0",
@@ -75,10 +78,10 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/srthkdev/dbeaver-mcp-server.git"
+        "url": "git+https://github.com/fzvincent/dbeaver-mcp-server.git"
     },
     "bugs": {
-        "url": "https://github.com/srthkdev/dbeaver-mcp-server/issues"
+        "url": "https://github.com/fzvincent/dbeaver-mcp-server/issues"
     },
-    "homepage": "https://github.com/srthkdev/dbeaver-mcp-server#readme"
+    "homepage": "https://github.com/fzvincent/dbeaver-mcp-server#readme"
 }
