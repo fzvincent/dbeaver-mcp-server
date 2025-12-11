@@ -55,3 +55,4 @@ query_results.csv
 execute-query.ts
 # specific ignore if needed
 local-scripts/
+test_output.txt

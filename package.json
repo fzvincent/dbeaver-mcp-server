@@ -25,7 +25,7 @@
         "publish:major": "npm version major && npm publish",
         "publish": "echo 'Use ./scripts/publish.sh or npm run publish:patch/minor/major instead'",
         "prepublishOnly": "npm run clean && npm run build",
-        "test": "echo \"No tests specified\" && exit 0",
+        "test": "jest",
         "lint": "echo \"No linter configured\" && exit 0"
     },
     "keywords": [
@@ -60,11 +60,14 @@
         "xml2js": "^0.6.2"
     },
     "devDependencies": {
+        "@types/jest": "^30.0.0",
         "@types/node": "^20.0.0",
         "@types/pg": "^8.11.6",
         "@types/xml2js": "^0.4.14",
+        "jest": "^30.2.0",
         "rimraf": "^5.0.5",
         "shx": "^0.4.0",
+        "ts-jest": "^29.4.6",
         "typescript": "^5.8.3"
     },
     "engines": {

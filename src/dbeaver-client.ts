@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import csv from 'csv-parser';
 import { Client } from 'pg';
+import mysql from 'mysql2/promise';
 import {
   DBeaverConnection,
   QueryResult,
